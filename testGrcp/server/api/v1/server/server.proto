@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+option go_package = "testgrpc/api/v1/server";
+
+service Server {
+	rpc Get(GetRequest) returns (GetResponse);
+} 
+
+message GetRequest {
+	string request = 1;
+}
+
+message GetResponse {
+	string response = 1;
+}
