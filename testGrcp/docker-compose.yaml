@@ -1,0 +1,36 @@
+version: '2'
+
+services:
+  server:
+    build:
+      context: ./server
+    restart: always
+      #ports:
+      #- "50001:50001"
+    deploy:
+      mode: replicated
+      replicas: 1
+    container_name: server
+    healthcheck:
+      test: ["CMD", "nc", "-vz", "localhost", "8400"]
+      interval: 30s
+      timeout: 10s
+      retries: 4
+     
+  client:
+    build:
+      context: ./client 
+    restart: always
+    container_name: client
+    ports:
+      - "3000:3000"
+        # - "50001:50001"
+        #volumes:
+        #- /home/jerome/Documents/projects/generationProject/clientGenerationServ/.generation:/.generation
+        #networks:
+        #  - my-network
+        #depends_on:
+        #  generation0:
+        #    condition: service_healthy
+
+

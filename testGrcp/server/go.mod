@@ -1,6 +1,6 @@
 module testgrpc
 
-go 1.20
+go 1.17
 
 require (
 	github.com/micro/micro/v3 v3.16.0

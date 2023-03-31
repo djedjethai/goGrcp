@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	grpcPort = "50001"
+	grpcPort = "50200"
 )
 
 func main() {
@@ -23,7 +23,7 @@ func main() {
 func grpcListen() {
 	fmt.Println("hit grpcListen")
 
-	lis, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%s", grpcPort))
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", grpcPort))
 	if err != nil {
 		log.Fatal("Err listening to grpc: ", err)
 	}

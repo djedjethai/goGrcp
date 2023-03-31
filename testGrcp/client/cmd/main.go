@@ -26,7 +26,7 @@ func main() {
 
 	ctx := context.Background()
 
-	conn, err := grpc.DialContext(ctx, ":50001", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.DialContext(ctx, "server:50200", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatal("Error when dial: ", err)
 	}

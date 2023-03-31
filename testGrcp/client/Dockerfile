@@ -1,7 +1,7 @@
 #####################################
 #   STEP 1 build executable binary  #
 #####################################
-FROM golang:alpine AS builder
+FROM golang:1.17.0-alpine AS builder
 
 # Install git.
 # Git is required for fetching the dependencies.
@@ -16,7 +16,6 @@ ENV GO111MODULE=on
 COPY . .
 
 RUN go mod download
-
 
 # Build the binary.
 RUN CGO_ENABLED=0 GOOS=linux go build -o main ./cmd
