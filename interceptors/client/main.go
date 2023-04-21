@@ -38,12 +38,19 @@ func main() {
 		ctx,
 		fmt.Sprintf("127.0.0.1:%v", grpcPort),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithUnaryInterceptor(orderUnaryClientInterceptor),
+		grpc.WithStreamInterceptor(clientStreamInterceptor),
 	)
 	if err != nil {
 		log.Fatalln("Err dialing: ", err)
 	}
 
 	client := pb.NewOrderManagementClient(conn)
+
+	clientDeadline := time.Now().Add(time.Duration(2 * time.Second))
+	// the context is pass in each client.Req() their the DeadLine will be apply
+	ctx, cancel := context.WithDeadline(context.Background(), clientDeadline)
+	defer cancel()
 
 	if strings.Compare(flg, "order") == 0 {
 
@@ -163,4 +170,50 @@ func asyncBidirectionalRPC(
 	}
 
 	<-c
+}
+
+// Unary client interceptor
+func orderUnaryClientInterceptor(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	// Preprocessor phase
+	log.Println("Method(client) : " + method)
+
+	// Invoking the remote method
+	err := invoker(ctx, method, req, reply, cc, opts...)
+
+	// Postprocessor phase
+	log.Println("postprocessing(client): ", reply)
+
+	return err
+}
+
+// stream client interceptor
+func clientStreamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+	log.Println("======= [Client Interceptor] ", method)
+	s, err := streamer(ctx, desc, cc, method, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return newWrappedStream(s), nil
+}
+
+type wrappedStream struct {
+	grpc.ClientStream
+}
+
+func (w *wrappedStream) RecvMsg(m interface{}) error {
+	log.Printf("====== [Client Stream Interceptor] "+
+		"Receive a message (Type: %T) at %v",
+		m, time.Now().Format(time.RFC3339))
+	return w.ClientStream.RecvMsg(m)
+}
+
+func (w *wrappedStream) SendMsg(m interface{}) error {
+	log.Printf("====== [Client Stream Interceptor] "+
+		"Send a message (Type: %T) at %v",
+		m, time.Now().Format(time.RFC3339))
+	return w.ClientStream.SendMsg(m)
+}
+
+func newWrappedStream(s grpc.ClientStream) grpc.ClientStream {
+	return &wrappedStream{s}
 }

@@ -6,12 +6,15 @@ import (
 	"log"
 	"net"
 	"strconv"
+	"time"
 	// "strings"
 
 	pb "communication/api"
 	"context"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -57,9 +60,11 @@ func grpcListen() {
 		log.Fatal("err creating the listener: ", err)
 	}
 
-	opt := []grpc.ServerOption{}
+	opt := []grpc.ServerOption{
+		grpc.MaxConcurrentStreams(10),
+	}
 
-	serv, err := NewGrpcServer(opt...)
+	serv, err := NewGrpcServer(orderUnaryServerInterceptor, opt)
 	if err != nil {
 		log.Fatal("err creating the server: ", err)
 	}
@@ -76,8 +81,12 @@ type Server struct {
 	pb.UnimplementedOrderManagementServer
 }
 
-func NewGrpcServer(opt ...grpc.ServerOption) (*grpc.Server, error) {
-	gsrv := grpc.NewServer()
+func NewGrpcServer(interceptor grpc.UnaryServerInterceptor, opt []grpc.ServerOption) (*grpc.Server, error) {
+	gsrv := grpc.NewServer(
+		grpc.UnaryInterceptor(interceptor),
+		grpc.StreamInterceptor(orderServerStreamInterceptor),
+		// opt..., // does not work, what the fuck...
+	)
 
 	srv := &Server{}
 
@@ -87,9 +96,41 @@ func NewGrpcServer(opt ...grpc.ServerOption) (*grpc.Server, error) {
 }
 
 func (s *Server) GetOrder(ctx context.Context, orderID *wrapperspb.StringValue) (*pb.Order, error) {
-	// srv implementation
-	ord := orderMap[orderID.Value]
-	return &ord, nil
+	fmt.Println("In GetOrder...")
+	// srv implementation(client req expire at 2s)
+	// time.Sleep(3000 * time.Millisecond)
+
+	// implement a logic to react to the clientDeadLine added at the client
+	switch err := ctx.Err(); err {
+	case context.DeadlineExceeded:
+		// Return a deadline exceeded error to the client
+		return nil, status.Error(codes.DeadlineExceeded, "operation timed out")
+	case context.Canceled:
+		// Return a canceled error to the client
+		return nil, status.Error(codes.Canceled, "operation canceled")
+	default:
+		// Continue with the RPC method logic
+		ord := orderMap[orderID.Value]
+		return &ord, nil
+	}
+
+}
+
+// Unary Server Interceptor, that will works with GetOrder
+func orderUnaryServerInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	// Preprocessing logic
+	// Gets info about the current RPC call by examining the args passed in
+	// here the req reach the service
+	log.Println("======= [Server Interceptor] ", info.FullMethod)
+
+	// Invoking the handler to complete the normal execution of a unary RPC.
+	// here the req go to the handler
+	m, err := handler(ctx, req)
+
+	// Post processing logic
+	// here the req go back to the client
+	log.Printf(" Post Proc Message : %s", m)
+	return m, err
 }
 
 // return a stream with found datas
@@ -199,4 +240,39 @@ func (s *Server) ProcessOrders(stream pb.OrderManagement_ProcessOrdersServer) er
 			ordersTh = []*pb.Order{}
 		}
 	}
+}
+
+// the stream interceptor
+type wrappedStream struct {
+	grpc.ServerStream
+}
+
+func newWrappedStream(s grpc.ServerStream) grpc.ServerStream {
+	return &wrappedStream{s}
+}
+
+func (w *wrappedStream) RecvMsg(m interface{}) error {
+	log.Printf("====== [Server Stream Interceptor Wrapper] "+
+		"Receive a message (Type: %T) at %s",
+		m, time.Now().Format(time.RFC3339))
+	return w.ServerStream.RecvMsg(m)
+}
+
+func (w *wrappedStream) SendMsg(m interface{}) error {
+	log.Printf("====== [Server Stream Interceptor Wrapper] "+
+		"Send a message (Type: %T) at %v",
+		m, time.Now().Format(time.RFC3339))
+	return w.ServerStream.SendMsg(m)
+}
+
+func orderServerStreamInterceptor(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+
+	log.Println("====== [Server Stream Interceptor] ", info.FullMethod)
+
+	err := handler(srv, newWrappedStream(ss))
+	if err != nil {
+		log.Printf("RPC failed with error %v", err)
+	}
+
+	return err
 }
