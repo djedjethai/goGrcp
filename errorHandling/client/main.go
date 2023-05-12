@@ -11,8 +11,11 @@ import (
 	pb "communication/api"
 	"log"
 
+	// "google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc"
+	// "google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	// "google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -96,10 +99,11 @@ func main() {
 			Id:          "aaa",
 			Items:       []string{"firyyyyy", "secondyyyy"},
 			Description: "YUI",
-			Price:       233456.4,
+			Price:       4567,
 			Destination: "Cambodge",
 		}
 
+		// TODO this is invalid and will create an err (price is missing)
 		orderMap["1"] = pb.Order{
 			Id:          "hjk",
 			Items:       []string{"thYYY", "forthYYY"},
@@ -116,8 +120,30 @@ func main() {
 		for _, v := range orderMap {
 			log.Println("see the data sent: ", v)
 
-			if err := updateStream.Send(&v); err != nil {
-				log.Println("Err client stream sending datas: ", err)
+			// TODO implement the error implementation on the client side
+			addOrderError := updateStream.Send(&v)
+			if addOrderError != nil {
+
+				// !!! THE CODE DOES NOT REACH HERE IF ERR FROM THE SERVER,
+				// THE CLIENT CLIENT CRASH AND REPORT THE ERR GENERATED FROM THE SERVER
+				log.Println("we are in the errrrrrrrrrrrrrr ", addOrderError)
+
+				// errorCode := status.Code(addOrderError)
+				// if errorCode == codes.InvalidArgument {
+				// 	log.Printf("Invalid Argument Error : %s", errorCode)
+				// 	errorStatus := status.Convert(addOrderError)
+				// 	for _, d := range errorStatus.Details() {
+				// 		switch info := d.(type) {
+				// 		case *errdetails.BadRequest_FieldViolation:
+				// 			// TODO finish here, the error is not detected here..... ???
+				// 			log.Printf("Request Field Invalid: %s", info)
+				// 		default:
+				// 			log.Printf("Unexpected error type: %s", info)
+				// 		}
+				// 	}
+				// } else {
+				// 	log.Printf("Unhandled error : %s ", errorCode)
+				// }
 			}
 		}
 

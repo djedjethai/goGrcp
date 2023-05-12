@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -12,6 +13,8 @@ import (
 	pb "communication/api"
 	"context"
 
+	// "github.com/golang/protobuf/proto"
+	// "github.com/golang/protobuf/ptypes/empty"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -170,9 +173,7 @@ func (s *Server) SearchOrders(orderID *wrapperspb.StringValue, stream pb.OrderMa
 }
 
 // receive a stream from the client and update its datas
-func (s *Server) UpdateOrders(stream pb.OrderManagement_UpdateOrdersServer) error {
-
-	ordersStr := "Updated Order IDs : "
+func (s *Server) UpdateOrders(stream pb.OrderManagement_UpdateOrdersServer) pb.UpdateOrdersResponse {
 
 	ordersLGT := len(orderMap)
 
@@ -183,11 +184,20 @@ func (s *Server) UpdateOrders(stream pb.OrderManagement_UpdateOrdersServer) erro
 		order, err := stream.Recv()
 		if err == io.EOF {
 			// finish reading the order stream
-			return stream.SendAndClose(
-				&wrapperspb.StringValue{Value: "Orders processed" + ordersStr})
+			return &wrapperspb.StringValue{Value: "Orders processed"}
+			break
+		}
+		log.Println("see datas: ", order)
+
+		if order.Price == 0.0 {
+			err = errors.New("Missing field(s)")
 		}
 
-		log.Println("see datas: ", order)
+		// TODO if all field of an order are not complete send an error
+		// error which will be handled by the client(cf see the client)
+		if err != nil {
+			return &wrapperspb.StringValue{Value: ""}, pb.ErrorServer{Key: "Price"}.MissingField()
+		}
 
 		orderMap[strconv.Itoa(ordersLGT)] = *order
 		ordersLGT++
