@@ -8,6 +8,7 @@ import (
 	"net"
 	"strconv"
 	"time"
+
 	// "strings"
 
 	pb "communication/api"
@@ -15,6 +16,8 @@ import (
 
 	// "github.com/golang/protobuf/proto"
 	// "github.com/golang/protobuf/ptypes/empty"
+	// "github.com/golang/protobuf/ptypes/any"
+	// "github.com/golang/protobuf/ptypes/wrappers"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -173,7 +176,7 @@ func (s *Server) SearchOrders(orderID *wrapperspb.StringValue, stream pb.OrderMa
 }
 
 // receive a stream from the client and update its datas
-func (s *Server) UpdateOrders(stream pb.OrderManagement_UpdateOrdersServer) pb.UpdateOrdersResponse {
+func (s *Server) UpdateOrders(stream pb.OrderManagement_UpdateOrdersServer) error {
 
 	ordersLGT := len(orderMap)
 
@@ -183,11 +186,9 @@ func (s *Server) UpdateOrders(stream pb.OrderManagement_UpdateOrdersServer) pb.U
 
 		order, err := stream.Recv()
 		if err == io.EOF {
-			// finish reading the order stream
-			return &wrapperspb.StringValue{Value: "Orders processed"}
-			break
+			return stream.SendAndClose(
+				&wrapperspb.StringValue{Value: "Orders processed"})
 		}
-		log.Println("see datas: ", order)
 
 		if order.Price == 0.0 {
 			err = errors.New("Missing field(s)")
@@ -196,7 +197,23 @@ func (s *Server) UpdateOrders(stream pb.OrderManagement_UpdateOrdersServer) pb.U
 		// TODO if all field of an order are not complete send an error
 		// error which will be handled by the client(cf see the client)
 		if err != nil {
-			return &wrapperspb.StringValue{Value: ""}, pb.ErrorServer{Key: "Price"}.MissingField()
+
+			st := status.New(codes.InvalidArgument, "invalid field")
+			desc := "Missing some field(s)"
+			v := &errdetails.BadRequest_FieldViolation{
+				Field:       "Price",
+				Description: desc,
+			}
+			br := &errdetails.BadRequest{}
+			br.FieldViolations = append(br.FieldViolations, v)
+			st, err := st.WithDetails(br)
+			if err != nil {
+				// If this errored, it will always error
+				// here, so better panic so we can figure
+				// out why than have this silently passing.
+				panic(fmt.Sprintf("Unexpected error attaching metadata: %v", err))
+			}
+			return st.Err()
 		}
 
 		orderMap[strconv.Itoa(ordersLGT)] = *order

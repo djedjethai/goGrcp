@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	// "reflect"
+	// "errors"
 	"fmt"
 	"io"
 	"os"
@@ -11,11 +13,12 @@ import (
 	pb "communication/api"
 	"log"
 
-	// "google.golang.org/genproto/googleapis/rpc/errdetails"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc"
+
 	// "google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
-	// "google.golang.org/grpc/status"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -108,7 +111,7 @@ func main() {
 			Id:          "hjk",
 			Items:       []string{"thYYY", "forthYYY"},
 			Description: "from where",
-			Price:       9,
+			// Price:       9,
 			Destination: "Netherland",
 		}
 
@@ -120,39 +123,29 @@ func main() {
 		for _, v := range orderMap {
 			log.Println("see the data sent: ", v)
 
-			// TODO implement the error implementation on the client side
-			addOrderError := updateStream.Send(&v)
-			if addOrderError != nil {
-
-				// !!! THE CODE DOES NOT REACH HERE IF ERR FROM THE SERVER,
-				// THE CLIENT CLIENT CRASH AND REPORT THE ERR GENERATED FROM THE SERVER
-				log.Println("we are in the errrrrrrrrrrrrrr ", addOrderError)
-
-				// errorCode := status.Code(addOrderError)
-				// if errorCode == codes.InvalidArgument {
-				// 	log.Printf("Invalid Argument Error : %s", errorCode)
-				// 	errorStatus := status.Convert(addOrderError)
-				// 	for _, d := range errorStatus.Details() {
-				// 		switch info := d.(type) {
-				// 		case *errdetails.BadRequest_FieldViolation:
-				// 			// TODO finish here, the error is not detected here..... ???
-				// 			log.Printf("Request Field Invalid: %s", info)
-				// 		default:
-				// 			log.Printf("Unexpected error type: %s", info)
-				// 		}
-				// 	}
-				// } else {
-				// 	log.Printf("Unhandled error : %s ", errorCode)
-				// }
+			err := updateStream.Send(&v)
+			if err != nil {
+				fmt.Println("We are in err, is trigger when???: ", err)
 			}
 		}
 
 		updateRes, err := updateStream.CloseAndRecv()
 		if err != nil {
-			log.Fatalln("Err close stream client: ", err)
+			st := status.Convert(err)
+			for _, detail := range st.Details() {
+				// fmt.Println("grrr: ", reflect.TypeOf(detail))
+				switch t := detail.(type) {
+				case *errdetails.BadRequest:
+					fmt.Println("Oops! Your request was rejected by the server.")
+					for _, violation := range t.GetFieldViolations() {
+						fmt.Printf("The %q field was wrong:\n", violation.GetField())
+						fmt.Printf("\t%s\n", violation.GetDescription())
+					}
+				}
+			}
+		} else {
+			fmt.Println("The response is correct: ", updateRes.Value)
 		}
-
-		log.Printf("Update Orders Res : %s", updateRes)
 
 	} else if strings.Compare(flg, "concat") == 0 {
 		streamProcOrder, err := client.ProcessOrders(ctx)

@@ -1,6 +1,7 @@
 syntax = "proto3";
 
 import "google/protobuf/wrappers.proto";
+// import "google/protobuf/any.proto";
 
 option go_package = "communication/api";
 
@@ -10,7 +11,6 @@ service OrderManagement {
 	rpc UpdateOrders(stream Order) returns (google.protobuf.StringValue);
 	rpc ProcessOrders(stream google.protobuf.StringValue) returns (stream CombinedShipment);
 }
-
 
 message Order{
 	string id = 1;
@@ -25,3 +25,5 @@ message CombinedShipment{
 	string status = 2;
 	repeated Order ordersList = 3;
 }
+
+
