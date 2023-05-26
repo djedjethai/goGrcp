@@ -15,6 +15,7 @@ import (
 
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 
 	// "google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -68,7 +69,7 @@ func main() {
 		// res, err := client.GetOrder(ctx, &wrapperspb.StringValue{Value: "1"})
 
 		// TODO test the error report from the server
-		res, err := client.GetOrder(ctx, &wrapperspb.StringValue{Value: "5"})
+		res, err := client.GetOrder(ctx, &wrapperspb.StringValue{Value: "1"})
 		if err != nil {
 			log.Fatalln("Err from client: ", err)
 		}
@@ -82,6 +83,12 @@ func main() {
 		}
 
 		log.Println("the ord: ", ord)
+
+		// NOTE see metadata for unary rpc
+		// does not work ??
+		// if md, ok := metadata.FromIncomingContext(ctx); ok {
+		// 	log.Println("See the metadata from server resp(getOrder): ", md)
+		// }
 
 	} else if strings.Compare(flg, "stream") == 0 {
 		fmt.Println("let start....")
@@ -208,6 +215,11 @@ func asyncBidirectionalRPC(
 		}
 		// TODO pass the datas throught the channel
 		log.Println("received datas: ", combinedShipment)
+
+		// NOTE does not work
+		// if md, ok := metadata.FromIncomingContext(streamProcOrder.Context()); ok {
+		// 	log.Println("see metadata from server at the client: ", md)
+		// }
 	}
 
 	<-c

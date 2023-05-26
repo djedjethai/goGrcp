@@ -21,6 +21,7 @@ import (
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -123,6 +124,21 @@ func NewGrpcServer(server *grpc.Server) {
 
 func (s *Server) GetOrder(ctx context.Context, orderID *wrapperspb.StringValue) (*pb.Order, error) {
 	fmt.Println("In GetOrder...")
+
+	// NOTE see metadata for unary rpc
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		log.Println("See the metadata from getOrder: ", md)
+	}
+
+	// NOTE Send back(from server to client) some metadata
+	// DOES NOT WORK ???
+	// create a send header
+	// header := metadata.Pairs("header-key", "val")
+	// grpc.SendHeader(ctx, header)
+	// // create a set trailer
+	// trailer := metadata.Pairs("trailer-key", "val")
+	// grpc.SetTrailer(ctx, trailer)
+
 	// srv implementation(client req expire at 2s)
 	// time.Sleep(3000 * time.Millisecond)
 
@@ -197,6 +213,11 @@ func (s *Server) SearchOrders(orderID *wrapperspb.StringValue, stream pb.OrderMa
 // receive a stream from the client and update its datas
 func (s *Server) UpdateOrders(stream pb.OrderManagement_UpdateOrdersServer) error {
 
+	// NOTE see metadata from a streaming rpc
+	if md, ok := metadata.FromIncomingContext(stream.Context()); ok {
+		log.Println("See the metadata from UpdateOrders: ", md)
+	}
+
 	ordersLGT := len(orderMap)
 
 	// pbOrders := pb.Order{}
@@ -270,6 +291,15 @@ func (s *Server) ProcessOrders(stream pb.OrderManagement_ProcessOrdersServer) er
 			}
 			return nil
 		}
+
+		// NOTE that the metadata to send to the client
+		// DOES NOT WORK ???
+		// create and send header
+		// header := metadata.Pairs("header-key", "val")
+		// stream.SendHeader(header)
+		// // create and set trailer
+		// trailer := metadata.Pairs("trailer-key", "val")
+		// stream.SetTrailer(trailer)
 
 		// TODO handle the err "canceled",
 		// which has been explicitly triggered from the client
