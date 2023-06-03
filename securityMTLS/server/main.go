@@ -1,12 +1,15 @@
 package main
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
+	"google.golang.org/grpc/credentials"
 	"io"
+	"io/ioutil"
 	"log"
 	"net"
 	"strconv"
-	// "strings"
 
 	pb "communication/api"
 	"context"
@@ -17,6 +20,9 @@ import (
 
 const (
 	grpcPort = 50001
+	crtFile  = "../certifs/server.pem"
+	keyFile  = "../certifs/server-key.pem"
+	caFile   = "../certifs/ca.pem"
 )
 
 type Order struct {
@@ -52,12 +58,37 @@ func main() {
 }
 
 func grpcListen() {
+	cert, err := tls.LoadX509KeyPair(crtFile, keyFile)
+	if err != nil {
+		log.Fatalf("failed to load key pair: %s", err)
+	}
+
+	// for mTLS ====
+	certPool := x509.NewCertPool()
+	ca, err := ioutil.ReadFile(caFile)
+	if err != nil {
+		log.Fatalf("could not read ca certificate: %s", err)
+	}
+	if ok := certPool.AppendCertsFromPEM(ca); !ok {
+		log.Fatalf("failed to append ca certificate")
+	}
+
+	opt := []grpc.ServerOption{
+		// grpc.Creds(credentials.NewServerTLSFromCert(&cert)),
+		grpc.Creds(
+			credentials.NewTLS(&tls.Config{
+				ClientAuth:   tls.RequireAndVerifyClientCert,
+				Certificates: []tls.Certificate{cert},
+				ClientCAs:    certPool,
+			},
+			)),
+	}
+	// ======
+
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%v", grpcPort))
 	if err != nil {
 		log.Fatal("err creating the listener: ", err)
 	}
-
-	opt := []grpc.ServerOption{}
 
 	serv, err := NewGrpcServer(opt...)
 	if err != nil {
@@ -76,8 +107,8 @@ type Server struct {
 	pb.UnimplementedOrderManagementServer
 }
 
-func NewGrpcServer(opt ...grpc.ServerOption) (*grpc.Server, error) {
-	gsrv := grpc.NewServer()
+func NewGrpcServer(opts ...grpc.ServerOption) (*grpc.Server, error) {
+	gsrv := grpc.NewServer(opts...)
 
 	srv := &Server{}
 
@@ -87,7 +118,6 @@ func NewGrpcServer(opt ...grpc.ServerOption) (*grpc.Server, error) {
 }
 
 func (s *Server) GetOrder(ctx context.Context, orderID *wrapperspb.StringValue) (*pb.Order, error) {
-	log.Println("order in srv")
 	// srv implementation
 	ord := orderMap[orderID.Value]
 	return &ord, nil

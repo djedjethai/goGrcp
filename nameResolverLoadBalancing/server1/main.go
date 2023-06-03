@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	grpcPort = 50001
+	grpcPort = 50002
 )
 
 type Order struct {
@@ -87,7 +87,7 @@ func NewGrpcServer(opt ...grpc.ServerOption) (*grpc.Server, error) {
 }
 
 func (s *Server) GetOrder(ctx context.Context, orderID *wrapperspb.StringValue) (*pb.Order, error) {
-	log.Println("order in srv")
+	log.Println("order in srv1")
 	// srv implementation
 	ord := orderMap[orderID.Value]
 	return &ord, nil

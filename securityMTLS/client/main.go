@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"strings"
 	"time"
@@ -12,12 +15,18 @@ import (
 	"log"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/credentials"
+	// "google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
-// const grpcPort = "50001"
+const (
+	grpcPort = "50001"
+	crtFile  = "../certifs/client.pem"
+	keyFile  = "../certifs/client-key.pem"
+	caFile   = "../certifs/ca.pem"
+	hostname = "127.0.0.1"
+)
 
 type Order struct {
 	ID          string
@@ -29,73 +38,41 @@ type Order struct {
 
 var orderMap = make(map[string]pb.Order)
 
-var (
-	exampleServiceName string = "myservice.com"
-	addr               string = fmt.Sprintf("example:///%s", exampleServiceName)
-)
-
-// register the servers' url matching the service name
-// (here I have only one but I could have 5)
-var addrsStore = map[string][]string{
-	"myservice.com": {
-		"127.0.0.1:50001",
-	},
-}
-
-// all the DNS logic works out of the box.... crazy
-type exampleResolverBuilder struct{}
-
-func (*exampleResolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
-
-	r := &exampleResolver{
-		target:     target,
-		cc:         cc,
-		addrsStore: addrsStore,
-	}
-	r.start()
-	return r, nil
-}
-
-func (*exampleResolverBuilder) Scheme() string {
-	return "example"
-}
-
-type exampleResolver struct {
-	target     resolver.Target
-	cc         resolver.ClientConn
-	addrsStore map[string][]string
-}
-
-func (r *exampleResolver) start() {
-
-	addrStrs := r.addrsStore[r.target.Endpoint()]
-	addrs := make([]resolver.Address, len(addrStrs))
-	for i, s := range addrStrs {
-		addrs[i] = resolver.Address{Addr: s}
-	}
-	r.cc.UpdateState(resolver.State{Addresses: addrs})
-}
-
-func (*exampleResolver) ResolveNow(o resolver.ResolveNowOptions) {}
-
-func (*exampleResolver) Close() {}
-
-// The init func is automaticaly triggered at program start
-func init() {
-	resolver.Register(&exampleResolverBuilder{})
-}
-
 func main() {
 
 	flg := os.Args[1]
+
+	// for mTLS ====
+	certificate, err := tls.LoadX509KeyPair(crtFile, keyFile)
+	if err != nil {
+		log.Fatalf("could not load client key pair: %s", err)
+	}
+
+	certPool := x509.NewCertPool()
+	ca, err := ioutil.ReadFile(caFile)
+	if err != nil {
+		log.Fatalf("could not read ca certificate: %s", err)
+	}
+	if ok := certPool.AppendCertsFromPEM(ca); !ok {
+		log.Fatalf("failed to append ca certs")
+	}
+
+	opts := []grpc.DialOption{
+		grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{
+			ServerName:   hostname, // NOTE: this is required!
+			Certificates: []tls.Certificate{certificate},
+			RootCAs:      certPool,
+		})),
+	}
+	// =========
 
 	ctx := context.Background()
 
 	conn, err := grpc.DialContext(
 		ctx,
-		// fmt.Sprintf("127.0.0.1:%v", grpcPort),
-		addr, // example:///myservice.com
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		fmt.Sprintf("127.0.0.1:%v", grpcPort),
+		opts...,
+	// grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
 		log.Fatalln("Err dialing: ", err)
